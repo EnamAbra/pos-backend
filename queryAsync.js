@@ -1,5 +1,5 @@
 // utils/queryAsync.js
-import db from './backend/database.js';
+import db from './database.js';
 
 /**
  * Promisified MySQL query helper.
