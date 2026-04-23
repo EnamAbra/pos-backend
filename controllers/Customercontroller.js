@@ -40,7 +40,7 @@ export const getCustomerHistory = async (req, res) => {
          s.status,
          s.sale_date,
          u.username AS cashier,
-         p.method   AS payment_method
+         p.payment_method
        FROM sales s
        LEFT JOIN users    u ON s.cashier_id = u.user_id
        LEFT JOIN payments p ON p.sale_id    = s.sale_id

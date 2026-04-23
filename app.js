@@ -2,8 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 
-
-import authRoutes    from './routes/authRoutes.js';
+import authRoutes      from './routes/authRoutes.js';
 import productRoutes   from './routes/productRoutes.js';
 import salesRoutes     from './routes/salesRoutes.js';
 import inventoryRoutes from './routes/Inventoryroutes.js';
@@ -13,26 +12,39 @@ import paystackRoutes  from './routes/PaystackRoutes.js';
 
 const app = express();
 
+// CORS — allow the dev origins plus whatever FRONTEND_URL is set to on Render
+const allowedOrigins = [
+  'http://localhost:5500',
+  'http://127.0.0.1:5500',
+  'http://localhost:3000',
+];
+if (process.env.FRONTEND_URL) allowedOrigins.push(process.env.FRONTEND_URL);
+
 app.use(cors({
-  origin: ['http://localhost:5500', 'http://127.0.0.1:5500', 'http://localhost:3000'],
+  origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-// IMPORTANT: Paystack webhook route BEFORE express.json()
-// The webhook captures raw body itself for HMAC-SHA512 verification.
+// Parse JSON and simultaneously stash the raw bytes on req.rawBody.
+// The Paystack webhook HMAC verification needs the exact raw string
+// that Paystack signed — this is the only reliable way to get it when
+// express.json() is applied globally.
+app.use(express.json({
+  verify: (req, _res, buf) => {
+    req.rawBody = buf.toString('utf8');
+  },
+}));
 
-
-app.use(express.json());
-app.use('/payments', paystackRoutes);
 app.use('/auth',      authRoutes);
 app.use('/products',  productRoutes);
 app.use('/sales',     salesRoutes);
 app.use('/inventory', inventoryRoutes);
 app.use('/customers', customerRoutes);
 app.use('/reports',   reportsRoutes);
+app.use('/payments',  paystackRoutes);
 
-app.get('/', (req, res) => res.json({ message: 'QuickPOS API running ✅' }));
+app.get('/', (_req, res) => res.json({ message: 'QuickPOS API running ✅' }));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));

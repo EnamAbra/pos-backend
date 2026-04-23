@@ -5,10 +5,13 @@ import { dirname, join } from 'path';
 import { mkdirSync } from 'fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const dbDir = join(__dirname, 'database');
-const dbPath = join(dbDir, 'pos.db');
 
-mkdirSync(dbDir, { recursive: true });
+// DB_PATH env var lets you point at a Render persistent disk (e.g. /var/data/pos.db).
+// Falls back to backend/database/pos.db for local development.
+const path =
+  process.env.RENDER
+    ? "/tmp/pos.db"
+    : "./database/pos.db";
 
 const db = await open({
   filename: dbPath,
