@@ -2,22 +2,27 @@
 import queryAsync from '../queryAsync.js';
 
 // GET /reports/daily-sales?days=7
-// Returns total sales per day for the last N days
 export const getDailySales = async (req, res) => {
   const days = parseInt(req.query.days) || 7;
+
+  // Compute cutoff date in JS — avoids MySQL-specific DATE_SUB / INTERVAL syntax
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const cutoffStr = cutoff.toISOString().slice(0, 10); // YYYY-MM-DD
+
   try {
     const rows = await queryAsync(
       `SELECT
-         DATE(created_at)          AS sale_date,
-         COUNT(*)                  AS total_orders,
-         SUM(total_amount)         AS total_revenue,
-         AVG(total_amount)         AS avg_order_value
+         DATE(sale_date)       AS sale_date,
+         COUNT(*)              AS total_orders,
+         SUM(total_amount)     AS total_revenue,
+         AVG(total_amount)     AS avg_order_value
        FROM sales
-       WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+       WHERE DATE(sale_date) >= ?
          AND status = 'completed'
-       GROUP BY DATE(created_at)
+       GROUP BY DATE(sale_date)
        ORDER BY sale_date ASC`,
-      [days]
+      [cutoffStr]
     );
     res.json({ success: true, data: rows });
   } catch (err) {
@@ -27,7 +32,6 @@ export const getDailySales = async (req, res) => {
 };
 
 // GET /reports/top-products?limit=10
-// Returns best selling products by quantity sold
 export const getTopProducts = async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   try {
@@ -37,11 +41,11 @@ export const getTopProducts = async (req, res) => {
          p.product_name,
          p.category,
          p.price,
-         SUM(si.quantity)           AS total_sold,
-         SUM(si.subtotal)           AS total_revenue
-       FROM sale_items si
+         SUM(si.quantity)   AS total_sold,
+         SUM(si.subtotal)   AS total_revenue
+       FROM sales_items si
        JOIN products p ON si.product_id = p.product_id
-       JOIN sales s    ON si.sale_id    = s.sale_id
+       JOIN sales    s ON si.sale_id    = s.sale_id
        WHERE s.status = 'completed'
        GROUP BY p.product_id, p.product_name, p.category, p.price
        ORDER BY total_sold DESC
@@ -56,7 +60,6 @@ export const getTopProducts = async (req, res) => {
 };
 
 // GET /reports/inventory
-// Returns all products with their stock level and a low-stock flag
 export const getInventory = async (req, res) => {
   try {
     const rows = await queryAsync(
@@ -66,8 +69,8 @@ export const getInventory = async (req, res) => {
          p.category,
          p.price,
          p.barcode,
-         COALESCE(i.quantity, 0)    AS stock,
-         CASE WHEN COALESCE(i.quantity, 0) <= 5 THEN 1 ELSE 0 END AS low_stock
+         COALESCE(i.stock_quantity, 0) AS stock,
+         CASE WHEN COALESCE(i.stock_quantity, 0) <= 5 THEN 1 ELSE 0 END AS low_stock
        FROM products p
        LEFT JOIN inventory i ON i.product_id = p.product_id
        ORDER BY low_stock DESC, p.product_name ASC`
@@ -80,7 +83,6 @@ export const getInventory = async (req, res) => {
 };
 
 // GET /reports/summary
-// Returns headline numbers: today's revenue, total sales, low stock count
 export const getSummary = async (req, res) => {
   try {
     const [todayRow] = await queryAsync(
@@ -88,19 +90,22 @@ export const getSummary = async (req, res) => {
          COALESCE(SUM(total_amount), 0) AS today_revenue,
          COUNT(*)                        AS today_orders
        FROM sales
-       WHERE DATE(created_at) = CURDATE() AND status = 'completed'`
+       WHERE DATE(sale_date) = DATE('now')
+         AND status = 'completed'`
     );
 
     const [totalRow] = await queryAsync(
       `SELECT
          COALESCE(SUM(total_amount), 0) AS all_time_revenue,
          COUNT(*)                        AS all_time_orders
-       FROM sales WHERE status = 'completed'`
+       FROM sales
+       WHERE status = 'completed'`
     );
 
     const [stockRow] = await queryAsync(
       `SELECT COUNT(*) AS low_stock_count
-       FROM inventory WHERE quantity <= 5`
+       FROM inventory
+       WHERE stock_quantity <= 5`
     );
 
     res.json({
@@ -110,8 +115,8 @@ export const getSummary = async (req, res) => {
         today_orders:     todayRow.today_orders,
         all_time_revenue: totalRow.all_time_revenue,
         all_time_orders:  totalRow.all_time_orders,
-        low_stock_count:  stockRow.low_stock_count
-      }
+        low_stock_count:  stockRow.low_stock_count,
+      },
     });
   } catch (err) {
     console.error('getSummary error:', err);

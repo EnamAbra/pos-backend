@@ -61,7 +61,7 @@ export const createProduct = async (req, res) => {
       data: { product_id: result.insertId, product_name, category, price, barcode }
     });
   } catch (err) {
-    if (err.code === 'ER_DUP_ENTRY') {
+    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE' || (err.message && err.message.includes('UNIQUE'))) {
       return res.status(409).json({ message: 'Barcode already exists' });
     }
     res.status(500).json({ message: 'Failed to create product' });
@@ -94,7 +94,7 @@ export const updateProduct = async (req, res) => {
     if (result.affectedRows === 0) return res.status(404).json({ message: 'Product not found' });
     res.json({ success: true, message: 'Product updated' });
   } catch (err) {
-    if (err.code === 'ER_DUP_ENTRY') {
+    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE' || (err.message && err.message.includes('UNIQUE'))) {
       return res.status(409).json({ message: 'Barcode already exists' });
     }
     res.status(500).json({ message: 'Failed to update product' });

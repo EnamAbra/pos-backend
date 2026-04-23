@@ -165,7 +165,7 @@ export const getSaleById = async (req, res) => {
 
     // Returns ALL payment rows — important for split payments
     const payments = await queryAsync(
-      'SELECT * FROM payments WHERE sale_id = ? ORDER BY paid_at ASC',
+      'SELECT * FROM payments WHERE sale_id = ? ORDER BY payment_date ASC',
       [id]
     );
 

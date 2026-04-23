@@ -61,7 +61,7 @@ export const updateStock = async (req, res) => {
         : Math.max(0, parseInt(adjustment) || 0);
 
       await queryAsync(
-        'INSERT INTO inventory (product_id, quantity) VALUES (?, ?)',
+        'INSERT INTO inventory (product_id, stock_quantity) VALUES (?, ?)',
         [productId, newQuantity]
       );
     } else {
@@ -70,14 +70,14 @@ export const updateStock = async (req, res) => {
         // Absolute set
         newQuantity = Math.max(0, parseInt(quantity));
         await queryAsync(
-          'UPDATE inventory SET quantity = ? WHERE product_id = ?',
+          'UPDATE inventory SET stock_quantity = ? WHERE product_id = ?',
           [newQuantity, productId]
         );
       } else {
         // Relative adjustment
-        newQuantity = Math.max(0, existing[0].quantity + parseInt(adjustment));
+        newQuantity = Math.max(0, existing[0].stock_quantity + parseInt(adjustment));
         await queryAsync(
-          'UPDATE inventory SET quantity = ? WHERE product_id = ?',
+          'UPDATE inventory SET stock_quantity = ? WHERE product_id = ?',
           [newQuantity, productId]
         );
       }

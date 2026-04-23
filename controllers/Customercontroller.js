@@ -38,14 +38,14 @@ export const getCustomerHistory = async (req, res) => {
          s.sale_id,
          s.total_amount,
          s.status,
-         s.created_at,
+         s.sale_date,
          u.username AS cashier,
          p.method   AS payment_method
        FROM sales s
        LEFT JOIN users    u ON s.cashier_id = u.user_id
        LEFT JOIN payments p ON p.sale_id    = s.sale_id
        WHERE s.customer_id = ?
-       ORDER BY s.created_at DESC`,
+       ORDER BY s.sale_date DESC`,
       [req.params.id]
     );
 
@@ -53,7 +53,7 @@ export const getCustomerHistory = async (req, res) => {
     for (const sale of sales) {
       sale.items = await queryAsync(
         `SELECT si.quantity, si.unit_price, si.subtotal, p.product_name
-         FROM sale_items si
+         FROM sales_items si
          JOIN products p ON si.product_id = p.product_id
          WHERE si.sale_id = ?`,
         [sale.sale_id]
