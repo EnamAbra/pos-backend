@@ -1,3 +1,5 @@
+console.log("DATABASE_URL =", process.env.DATABASE_URL);
+
 import pkg from 'pg';
 import 'dotenv/config';
 
