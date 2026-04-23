@@ -4,9 +4,6 @@ import queryAsync from '../queryAsync.js';
 
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY?.trim();
 
-// ─────────────────────────────────────────────
-// Helper: Paystack Request
-// ─────────────────────────────────────────────
 function paystackRequest(method, path, body = null) {
   return new Promise((resolve, reject) => {
     const options = {
@@ -22,33 +19,20 @@ function paystackRequest(method, path, body = null) {
 
     const req = https.request(options, (res) => {
       let data = '';
-
-      res.on('data', chunk => data += chunk);
-
+      res.on('data', chunk => { data += chunk; });
       res.on('end', () => {
-        console.log("📡 Paystack raw:", data);
-
-        try {
-          resolve(JSON.parse(data));
-        } catch {
-          reject(new Error('Invalid JSON from Paystack'));
-        }
+        try { resolve(JSON.parse(data)); }
+        catch { reject(new Error('Invalid JSON from Paystack')); }
       });
     });
 
-    req.on('error', (err) => {
-      console.error("❌ Network error:", err);
-      reject(err);
-    });
-
+    req.on('error', reject);
     if (body) req.write(JSON.stringify(body));
     req.end();
   });
 }
 
-// ─────────────────────────────────────────────
-// INITIATE PAYMENT
-// ─────────────────────────────────────────────
+// POST /payments/momo/initiate
 export const initiateMomoPayment = async (req, res) => {
   try {
     const { phone, network, cart_items, customer_id } = req.body;
@@ -58,127 +42,85 @@ export const initiateMomoPayment = async (req, res) => {
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
-    // Normalize phone
     let momoPhone = phone.replace(/\s+/g, '');
-    if (momoPhone.startsWith('0')) {
-      momoPhone = '+233' + momoPhone.substring(1);
-    }
+    if (momoPhone.startsWith('0')) momoPhone = '+233' + momoPhone.substring(1);
 
-    // Calculate total
     let total = 0;
     const enrichedItems = [];
 
     for (const item of cart_items) {
       const rows = await queryAsync(
-        'SELECT product_id, product_name, price FROM products WHERE product_id = ?',
+        'SELECT product_id, product_name, price FROM products WHERE product_id = $1',
         [item.product_id]
       );
-
       if (!rows.length) {
-        return res.status(404).json({ message: 'Product not found' });
+        return res.status(404).json({ message: `Product ${item.product_id} not found` });
       }
-
       const product = rows[0];
       const subtotal = product.price * item.quantity;
-
       total += subtotal;
-
-      enrichedItems.push({
-        ...product,
-        quantity: item.quantity,
-        subtotal,
-      });
+      enrichedItems.push({ ...product, quantity: item.quantity, subtotal });
     }
 
     const reference = `POS-${Date.now()}`;
 
-    // Save transaction
     await queryAsync(
       `INSERT INTO paystack_transactions
-      (reference, cashier_id, customer_id, amount, status, cart_snapshot)
-      VALUES (?, ?, ?, ?, 'pending', ?)`,
-      [
-        reference,
-        cashier_id,
-        customer_id || null,
-        total,
-        JSON.stringify(enrichedItems),
-      ]
+         (reference, cashier_id, customer_id, amount, status, cart_snapshot)
+       VALUES ($1, $2, $3, $4, 'pending', $5)`,
+      [reference, cashier_id, customer_id || null, total, JSON.stringify(enrichedItems)]
     );
 
-    // ✅ Correct Paystack call
-    const paystackRes = await paystackRequest(
-      'POST',
-      '/transaction/initialize',
-      {
-        amount: Math.round(total * 100),
-        email: `pos-${cashier_id}@example.com`,
-        currency: 'GHS',
-        reference,
-        channels: ['mobile_money'],
-        metadata: {
-          phone: momoPhone,
-          custom_fields: [
-            {
-              display_name: "Phone",
-              variable_name: "phone",
-              value: momoPhone,
-            },
-          ],
-        },
-      }
-    );
+    const paystackRes = await paystackRequest('POST', '/transaction/initialize', {
+      amount:    Math.round(total * 100),
+      email:     `pos-${cashier_id}@example.com`,
+      currency:  'GHS',
+      reference,
+      channels:  ['mobile_money'],
+      metadata: {
+        phone: momoPhone,
+        custom_fields: [{ display_name: 'Phone', variable_name: 'phone', value: momoPhone }],
+      },
+    });
 
     if (!paystackRes.status) {
-      return res.status(500).json({ message: 'Paystack error' });
+      return res.status(500).json({ message: 'Paystack error', detail: paystackRes.message });
     }
 
     return res.json({
-      success: true,
+      success:           true,
       authorization_url: paystackRes.data.authorization_url,
-      reference: paystackRes.data.reference,
+      reference:         paystackRes.data.reference,
     });
-
   } catch (err) {
-    console.error(err);
+    console.error('initiateMomoPayment error:', err);
     res.status(500).json({ message: 'Payment initiation failed' });
   }
 };
 
-// ─────────────────────────────────────────────
-// VERIFY PAYMENT
-// ─────────────────────────────────────────────
+// GET /payments/momo/verify/:reference
 export const verifyMomoPayment = async (req, res) => {
   const { reference } = req.params;
-
   try {
-    const paystackRes = await paystackRequest(
-      'GET',
-      `/transaction/verify/${reference}`
-    );
-
-    const status = paystackRes.data.status;
+    const paystackRes = await paystackRequest('GET', `/transaction/verify/${reference}`);
+    const status = paystackRes.data?.status;
 
     if (status === 'success') {
       await queryAsync(
-        `UPDATE paystack_transactions SET status='success' WHERE reference=?`,
+        `UPDATE paystack_transactions SET status = 'success', updated_at = NOW() WHERE reference = $1`,
         [reference]
       );
-
       return res.json({ success: true });
     }
 
     return res.json({ success: false, status });
-
   } catch (err) {
-    console.error(err);
+    console.error('verifyMomoPayment error:', err);
     res.status(500).json({ message: 'Verification failed' });
   }
 };
 
-// ─────────────────────────────────────────────
-// WEBHOOK (OPTIONAL BUT GOOD)
-// ─────────────────────────────────────────────
+// POST /payments/momo/webhook
 export const paystackWebhook = async (req, res) => {
   const hash = crypto
     .createHmac('sha512', PAYSTACK_SECRET)
@@ -193,9 +135,8 @@ export const paystackWebhook = async (req, res) => {
 
   if (event.event === 'charge.success') {
     const reference = event.data.reference;
-
     await queryAsync(
-      `UPDATE paystack_transactions SET status='success' WHERE reference=?`,
+      `UPDATE paystack_transactions SET status = 'success', updated_at = NOW() WHERE reference = $1`,
       [reference]
     );
   }

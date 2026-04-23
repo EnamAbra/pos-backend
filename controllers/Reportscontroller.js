@@ -5,7 +5,7 @@ import queryAsync from '../queryAsync.js';
 export const getDailySales = async (req, res) => {
   const days = parseInt(req.query.days) || 7;
 
-  // Compute cutoff date in JS — avoids MySQL-specific DATE_SUB / INTERVAL syntax
+  // Compute cutoff in JS to avoid any DB-specific date arithmetic
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
   const cutoffStr = cutoff.toISOString().slice(0, 10); // YYYY-MM-DD
@@ -13,15 +13,15 @@ export const getDailySales = async (req, res) => {
   try {
     const rows = await queryAsync(
       `SELECT
-         DATE(sale_date)       AS sale_date,
-         COUNT(*)              AS total_orders,
-         SUM(total_amount)     AS total_revenue,
-         AVG(total_amount)     AS avg_order_value
+         sale_date::date        AS sale_date,
+         COUNT(*)               AS total_orders,
+         SUM(total_amount)      AS total_revenue,
+         AVG(total_amount)      AS avg_order_value
        FROM sales
-       WHERE DATE(sale_date) >= ?
+       WHERE sale_date::date >= $1::date
          AND status = 'completed'
-       GROUP BY DATE(sale_date)
-       ORDER BY sale_date ASC`,
+       GROUP BY sale_date::date
+       ORDER BY sale_date::date ASC`,
       [cutoffStr]
     );
     res.json({ success: true, data: rows });
@@ -41,15 +41,15 @@ export const getTopProducts = async (req, res) => {
          p.product_name,
          p.category,
          p.price,
-         SUM(si.quantity)   AS total_sold,
-         SUM(si.subtotal)   AS total_revenue
+         SUM(si.quantity)  AS total_sold,
+         SUM(si.subtotal)  AS total_revenue
        FROM sales_items si
        JOIN products p ON si.product_id = p.product_id
        JOIN sales    s ON si.sale_id    = s.sale_id
        WHERE s.status = 'completed'
        GROUP BY p.product_id, p.product_name, p.category, p.price
        ORDER BY total_sold DESC
-       LIMIT ?`,
+       LIMIT $1`,
       [limit]
     );
     res.json({ success: true, data: rows });
@@ -85,12 +85,13 @@ export const getInventory = async (req, res) => {
 // GET /reports/summary
 export const getSummary = async (req, res) => {
   try {
+    // CURRENT_DATE is PostgreSQL's equivalent of SQLite's DATE('now')
     const [todayRow] = await queryAsync(
       `SELECT
          COALESCE(SUM(total_amount), 0) AS today_revenue,
          COUNT(*)                        AS today_orders
        FROM sales
-       WHERE DATE(sale_date) = DATE('now')
+       WHERE sale_date::date = CURRENT_DATE
          AND status = 'completed'`
     );
 
@@ -112,10 +113,10 @@ export const getSummary = async (req, res) => {
       success: true,
       data: {
         today_revenue:    todayRow.today_revenue,
-        today_orders:     todayRow.today_orders,
+        today_orders:     Number(todayRow.today_orders),
         all_time_revenue: totalRow.all_time_revenue,
-        all_time_orders:  totalRow.all_time_orders,
-        low_stock_count:  stockRow.low_stock_count,
+        all_time_orders:  Number(totalRow.all_time_orders),
+        low_stock_count:  Number(stockRow.low_stock_count),
       },
     });
   } catch (err) {

@@ -5,7 +5,8 @@
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
-    "dev": "nodemon app.js"
+    "dev": "nodemon app.js",
+    "migrate": "node database/migrate_to_pg.js"
   },
   "keywords": [],
   "author": "",
@@ -14,15 +15,16 @@
   "dependencies": {
     "@paystack/inline-js": "^2.22.8",
     "axios": "^1.14.0",
-    "bcrypt": "^6.0.0",
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "sqlite": "^5.1.1"
-  
+    "pg": "^8.20.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7"
   }
 }

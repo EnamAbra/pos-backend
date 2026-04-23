@@ -1,7 +1,7 @@
 // controllers/inventoryController.js
 import queryAsync from '../queryAsync.js';
 
-// GET /inventory — all products with their stock levels
+// GET /inventory — all products with current stock levels
 export const getAllInventory = async (req, res) => {
   try {
     const rows = await queryAsync(
@@ -25,59 +25,52 @@ export const getAllInventory = async (req, res) => {
 };
 
 // PUT /inventory/:productId — set or adjust stock level
-// Body: { quantity } to set absolute value
-// Body: { adjustment: 10 } to add/subtract (positive = add, negative = remove)
+// Body: { quantity }    → absolute set
+// Body: { adjustment }  → relative change (positive or negative)
 export const updateStock = async (req, res) => {
   const { productId } = req.params;
   const { quantity, adjustment, reason } = req.body;
 
-  // Must provide either quantity (absolute set) or adjustment (relative change)
   if (quantity === undefined && adjustment === undefined) {
     return res.status(400).json({ message: 'Provide either quantity (absolute) or adjustment (relative)' });
   }
 
   try {
-    // Check product exists
     const product = await queryAsync(
-      'SELECT product_id, product_name FROM products WHERE product_id = ?',
+      'SELECT product_id, product_name FROM products WHERE product_id = $1',
       [productId]
     );
     if (!product.length) {
       return res.status(404).json({ message: 'Product not found' });
     }
 
-    // Check if inventory row exists
     const existing = await queryAsync(
-      'SELECT * FROM inventory WHERE product_id = ?',
+      'SELECT * FROM inventory WHERE product_id = $1',
       [productId]
     );
 
     let newQuantity;
 
     if (existing.length === 0) {
-      // No inventory row yet — create it
       newQuantity = quantity !== undefined
         ? Math.max(0, parseInt(quantity))
         : Math.max(0, parseInt(adjustment) || 0);
 
       await queryAsync(
-        'INSERT INTO inventory (product_id, stock_quantity) VALUES (?, ?)',
+        'INSERT INTO inventory (product_id, stock_quantity) VALUES ($1, $2)',
         [productId, newQuantity]
       );
     } else {
-      // Update existing row
       if (quantity !== undefined) {
-        // Absolute set
         newQuantity = Math.max(0, parseInt(quantity));
         await queryAsync(
-          'UPDATE inventory SET stock_quantity = ? WHERE product_id = ?',
+          'UPDATE inventory SET stock_quantity = $1, last_updated = NOW() WHERE product_id = $2',
           [newQuantity, productId]
         );
       } else {
-        // Relative adjustment
         newQuantity = Math.max(0, existing[0].stock_quantity + parseInt(adjustment));
         await queryAsync(
-          'UPDATE inventory SET stock_quantity = ? WHERE product_id = ?',
+          'UPDATE inventory SET stock_quantity = $1, last_updated = NOW() WHERE product_id = $2',
           [newQuantity, productId]
         );
       }
@@ -91,8 +84,8 @@ export const updateStock = async (req, res) => {
         product_name: product[0].product_name,
         new_quantity: newQuantity,
         low_stock:    newQuantity <= 5,
-        reason:       reason || null
-      }
+        reason:       reason || null,
+      },
     });
   } catch (err) {
     console.error('updateStock error:', err);

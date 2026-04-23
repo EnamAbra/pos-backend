@@ -1,5 +1,5 @@
 // controllers/authController.js
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import queryAsync from '../queryAsync.js';
 
@@ -18,18 +18,18 @@ export const register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const result = await queryAsync(
-      'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
+      'INSERT INTO users (username, password, role) VALUES ($1, $2, $3) RETURNING user_id',
       [username, hashedPassword, userRole]
     );
 
     res.status(201).json({
       success: true,
-      message:  'User registered',
-      user_id:  result.insertId,
+      message: 'User registered',
+      user_id: result.insertId,
     });
   } catch (err) {
     console.error('Registration error:', err);
-    if (err.message && err.message.includes('UNIQUE')) {
+    if (err.code === '23505') { // PostgreSQL unique violation
       return res.status(409).json({ message: 'Username already exists' });
     }
     res.status(500).json({ message: 'Registration failed', error: err.message });
@@ -46,7 +46,7 @@ export const login = async (req, res) => {
 
   try {
     const rows = await queryAsync(
-      'SELECT * FROM users WHERE username = ?',
+      'SELECT * FROM users WHERE username = $1',
       [username]
     );
     const user = rows[0];
