@@ -1,5 +1,5 @@
 import { open } from "sqlite";
-import sqlite3 from "sqlite3";
+import sqlite from "sqlite";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 
@@ -13,7 +13,7 @@ const dbPath = process.env.RENDER
 // open database
 const db = await open({
   filename: dbPath,
-  driver: sqlite3.Database,
+  driver: sqlite.Database,
 });
 
 // PRAGMAs
