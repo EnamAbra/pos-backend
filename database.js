@@ -1,4 +1,4 @@
-console.log("DATABASE_URL =", process.env.DATABASE_URL);
+
 
 import pkg from 'pg';
 import 'dotenv/config';
@@ -12,10 +12,12 @@ types.setTypeParser(20, Number);
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  ssl: {
+    rejectUnauthorized: false
+  },
   max: 10,
-  idleTimeoutMillis: 30_000,
-  connectionTimeoutMillis: 5_000,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
 });
 
 // Fail fast if the database is unreachable at startup
