@@ -9,51 +9,32 @@ import inventoryRoutes from './routes/Inventoryroutes.js';
 import customerRoutes  from './routes/CustomerRoutes.js';
 import reportsRoutes   from './routes/reportsRoutes.js';
 import paystackRoutes  from './routes/PaystackRoutes.js';
-import cors from 'cors';
+
 const app = express();
 
-
-
-
-
-import cors from 'cors';
-
+// ── CORS ─────────────────────────────────────────────────────
 const corsOptions = {
-  origin: 'https://pos-frontend-ten-pi.vercel.app',
+  origin: [
+    'https://pos-frontend-ten-pi.vercel.app',
+    'http://localhost:5500',
+    'http://127.0.0.1:5500',
+    ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
+  ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
+app.options('*', cors(corsOptions)); // handle all preflight requests
 
-// IMPORTANT: explicitly handle preflight requests
-app.options('*', cors(corsOptions))
-// CORS — allow the dev origins plus whatever FRONTEND_URL is set to on Render
-const allowedOrigins = [
-
-  'http://localhost:5500',
-  'http://127.0.0.1:5500',
-  'https://pos-frontend-ten-pi.vercel.app',
-];
-if (process.env.FRONTEND_URL) allowedOrigins.push(process.env.FRONTEND_URL);
-
-app.use(cors({
-  origin: 'https://pos-frontend-ten-pi.vercel.app',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-}));
-
-// Parse JSON and simultaneously stash the raw bytes on req.rawBody.
-// The Paystack webhook HMAC verification needs the exact raw string
-// that Paystack signed — this is the only reliable way to get it when
-// express.json() is applied globally.
+// ── Body parsing ─────────────────────────────────────────────
+// verify captures raw bytes for Paystack HMAC webhook verification
 app.use(express.json({
-  verify: (req, _res, buf) => {
-    req.rawBody = buf.toString('utf8');
-  },
+  verify: (req, _res, buf) => { req.rawBody = buf.toString('utf8'); },
 }));
 
+// ── Routes ───────────────────────────────────────────────────
 app.use('/auth',      authRoutes);
 app.use('/products',  productRoutes);
 app.use('/sales',     salesRoutes);
@@ -64,28 +45,6 @@ app.use('/payments',  paystackRoutes);
 
 app.get('/', (_req, res) => res.json({ message: 'QuickPOS API running ✅' }));
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
-
-// Parse JSON and simultaneously stash the raw bytes on req.rawBody.
-// The Paystack webhook HMAC verification needs the exact raw string
-// that Paystack signed — this is the only reliable way to get it when
-// express.json() is applied globally.
-app.use(express.json({
-  verify: (req, _res, buf) => {
-    req.rawBody = buf.toString('utf8');
-  },
-}));
-
-app.use('/auth',      authRoutes);
-app.use('/products',  productRoutes);
-app.use('/sales',     salesRoutes);
-app.use('/inventory', inventoryRoutes);
-app.use('/customers', customerRoutes);
-app.use('/reports',   reportsRoutes);
-app.use('/payments',  paystackRoutes);
-
-app.get('/', (_req, res) => res.json({ message: 'QuickPOS API running ✅' }));
-
+// ── Start ─────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
