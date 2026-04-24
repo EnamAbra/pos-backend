@@ -16,18 +16,16 @@ const app = express();
 
 
 
+import cors from 'cors';
+
 const corsOptions = {
   origin: 'https://pos-frontend-ten-pi.vercel.app',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
 
-
-
-
-app.options('*', cors(corsOptions));
-
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // IMPORTANT: explicitly handle preflight requests
 app.options('*', cors(corsOptions))
