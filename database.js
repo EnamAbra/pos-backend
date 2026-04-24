@@ -20,12 +20,18 @@ const pool = new Pool({
   connectionTimeoutMillis: 5000,
 });
 
-// Fail fast if the database is unreachable at startup
-const client = await pool.connect();
-console.log('Connected to PostgreSQL ✅');
-client.release();
+// Initialize schema — runs once per startup. Wrapped so a DB hiccup doesn't
+// prevent the Express server from binding its port and answering requests.
+try {
+  const client = await pool.connect();
+  client.release();
+  console.log('Connected to PostgreSQL ✅');
+} catch (err) {
+  console.error('⚠️  Could not connect to PostgreSQL at startup:', err.message);
+  console.error('    Check that DATABASE_URL is set correctly on Render.');
+  process.exit(1); // fail loudly so Render shows the real error in deploy logs
+}
 
-// Auto-initialize schema on first deploy (idempotent — safe to run every startup)
 await pool.query(`
   CREATE TABLE IF NOT EXISTS users (
     user_id        SERIAL PRIMARY KEY,

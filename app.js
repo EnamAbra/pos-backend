@@ -26,7 +26,6 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // handle all preflight requests
 
 // ── Body parsing ─────────────────────────────────────────────
 // verify captures raw bytes for Paystack HMAC webhook verification
