@@ -9,10 +9,22 @@ import inventoryRoutes from './routes/Inventoryroutes.js';
 import customerRoutes  from './routes/CustomerRoutes.js';
 import reportsRoutes   from './routes/reportsRoutes.js';
 import paystackRoutes  from './routes/PaystackRoutes.js';
-
+import cors from 'cors';
 const app = express();
 
 
+
+const corsOptions = {
+  origin: 'https://pos-frontend-ten-pi.vercel.app',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+
+// IMPORTANT: explicitly handle preflight requests
+app.options('*', cors(corsOptions))
 // CORS — allow the dev origins plus whatever FRONTEND_URL is set to on Render
 const allowedOrigins = [
 
