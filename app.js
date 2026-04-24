@@ -14,12 +14,18 @@ const app = express();
 
 
 
+
+
 const corsOptions = {
   origin: 'https://pos-frontend-ten-pi.vercel.app',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
 };
+
+
+
+
+app.options('*', cors(corsOptions));
 
 app.use(cors(corsOptions));
 
